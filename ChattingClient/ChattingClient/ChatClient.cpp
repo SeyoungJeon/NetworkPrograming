@@ -24,17 +24,16 @@
 #define CHATNAME_SIZE 10
 #define SENDMESSAGE_SIZE 50
 #define PORT_SIZE 5
-#define ROOMNUMBER_SIZE 1
+#define ROOMNAME_SIZE 10
 #define BUFFER_SIZE 1024
 
 using namespace std;
 
 //프로그램에 필요한 전역변수 선언
- HINSTANCE g_hInst; // hinstantce 객체
- HWND ipAddressEdit, chatNameEdit, portEdit, roomNuberEdit; // Control과 연결할 변수 선언
- char ipAddress[IPADDRESS_SIZE], chatName[CHATNAME_SIZE], port[PORT_SIZE], roomNumber[ROOMNUMBER_SIZE];
-
-
+HINSTANCE g_hInst; // hinstantce 객체
+HWND ipAddressEdit, chatNameEdit, portEdit, roomNumberEdit1, roomNumberEdit2,
+ReadOnlyRoomNameEdit, ReadOnlyChatNameEdit;
+char ipAddress[IPADDRESS_SIZE], chatName[CHATNAME_SIZE], port[PORT_SIZE], roomName[ROOMNAME_SIZE];
 
 // 채팅방 입장 시 필요한 정보 입력하는 Dialog 처리하는 함수
 BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -77,33 +76,35 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 {
 	bool checkException = false;
 	string warnningMessage = "";
-	
+	bool IsCheckRoom1, IsCheckRoom2;
+
 	switch (uMsg) {
 		
 	case WM_INITDIALOG:
 		MoveCenterDialog(hDlg);
 
 		ipAddressEdit = GetDlgItem(hDlg, IDC_IPADDRESS1);
-		portEdit = GetDlgItem(hDlg, IDC_EDIT2);
-		roomNuberEdit = GetDlgItem(hDlg, IDC_EDIT3);
-		chatNameEdit = GetDlgItem(hDlg, IDC_EDIT4);
+		portEdit = GetDlgItem(hDlg, Port_EDIT);
+		chatNameEdit = GetDlgItem(hDlg, ChatName_EDIT);
+		roomNumberEdit1 = GetDlgItem(hDlg, IDC_RADIO1);
+		roomNumberEdit2 = GetDlgItem(hDlg, IDC_RADIO2);
 
 		// EditText 글자 수 제한
 		SendMessage(portEdit, EM_SETLIMITTEXT, PORT_SIZE, 0);
 		SendMessage(chatNameEdit, EM_SETLIMITTEXT, CHATNAME_SIZE, 0);
-		SendMessage(roomNuberEdit, EM_SETLIMITTEXT, ROOMNUMBER_SIZE, 0);
-
+		
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 		case IDOK:
 			
 			// EditText Text 내용 가져오기
-			GetDlgItemText(hDlg, IDC_IPADDRESS1, ipAddress, IPADDRESS_SIZE + 1);
-			GetDlgItemText(hDlg, IDC_EDIT2, port, PORT_SIZE + 1);
-			GetDlgItemText(hDlg, IDC_EDIT3, roomNumber, ROOMNUMBER_SIZE + 1);
-			GetDlgItemText(hDlg, IDC_EDIT4, chatName, CHATNAME_SIZE + 1);
-
+			GetWindowText(ipAddressEdit, ipAddress, IPADDRESS_SIZE + 1);
+			GetWindowText(portEdit, port, PORT_SIZE + 1);
+			GetWindowText(chatNameEdit, chatName, CHATNAME_SIZE + 1);
+			IsCheckRoom1 = IsDlgButtonChecked(hDlg, IDC_RADIO1);
+			IsCheckRoom2 = IsDlgButtonChecked(hDlg, IDC_RADIO2);
+			
 			if (!IsAvailableIP(ipAddress)) {
 				warnningMessage += "Class A,B,C에 해당하는 주소를 입력하세요.\n";
 				checkException = true;
@@ -116,8 +117,8 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 				warnningMessage += "대화명은 영어(소문자)와 숫자를 포함한 10글자 이내만 가능합니다.\n";
 				checkException = true;
 			}
-			if (!IsAvailableRoomNumber(roomNumber)) {
-				warnningMessage += "방 번호는 1번 혹은 2번만 가능합니다.\n";
+			if (!IsCheckRoom1 && !IsCheckRoom2) {
+				warnningMessage += "대화방을 선택하세요.\n";
 				checkException = true;
 			}
 
@@ -125,12 +126,17 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 				MessageBox(nullptr, TEXT(warnningMessage.c_str()), TEXT("Meesage"), MB_OK);
 			}
 			else {
+				if (IsCheckRoom1) {
+					strcpy(roomName, "1번 대화방");
+				}
+				else if (IsCheckRoom2) {
+					strcpy(roomName, "2번 대화방");
+				}
 				EndDialog(hDlg, IDC_BUTTON2);
 				// 채팅창 Dialog 창 생성
 				DialogBox(g_hInst, MAKEINTRESOURCE(IDD_DIALOG3), NULL, ChattingProc);
 			}
 
-			
 			return TRUE;
 		case IDC_BUTTON2:
 
@@ -152,6 +158,13 @@ BOOL CALLBACK ChattingProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	switch (uMsg) {
 	case WM_INITDIALOG:
 		MoveCenterDialog(hDlg);
+
+		ReadOnlyChatNameEdit = GetDlgItem(hDlg, IDC_EDIT5);
+		ReadOnlyRoomNameEdit = GetDlgItem(hDlg, IDC_EDIT10);
+		
+		SetWindowText(ReadOnlyChatNameEdit, chatName);
+		SetWindowText(ReadOnlyRoomNameEdit, roomName);
+
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
