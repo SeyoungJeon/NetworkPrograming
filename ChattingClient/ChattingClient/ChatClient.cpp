@@ -25,15 +25,22 @@
 #define SENDMESSAGE_SIZE 50
 #define PORT_SIZE 5
 #define ROOMNAME_SIZE 10
-#define BUFFER_SIZE 1024
+#define MESSAGE_SIZE 50
+#define BUFFER_SIZE 512
+
+// 임시 주소 포트
+#define SERVERIP   "127.0.0.1"
+#define SERVERPORT 9000
 
 using namespace std;
 
 //프로그램에 필요한 전역변수 선언
 HINSTANCE g_hInst; // hinstantce 객체
-HWND ipAddressEdit, chatNameEdit, portEdit, roomNumberEdit1, roomNumberEdit2,
-ReadOnlyRoomNameEdit, ReadOnlyChatNameEdit;
+HWND ipAddressEdit, chatNameEdit, portEdit, roomNumberEdit1, roomNumberEdit2, messageEdit,
+ReadOnlyRoomNameEdit, ReadOnlyChatNameEdit, chattingMessageEdit;
 char ipAddress[IPADDRESS_SIZE], chatName[CHATNAME_SIZE], port[PORT_SIZE], roomName[ROOMNAME_SIZE];
+
+SOCKET sock;
 
 // 채팅방 입장 시 필요한 정보 입력하는 Dialog 처리하는 함수
 BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -59,13 +66,17 @@ bool IsAvailableChatName(string chatName);
 // Port 예외처리 함수
 bool IsAvailablePort(string port);
 
-// 방 번호 예외처리하는 함수
-bool IsAvailableRoomNumber(string roomNumber);
+// 소켓 함수 오류시 처리하는 함수
+void err_quit(const char *msg);
+void err_display(const char *msg);
+
+// 실시간 데이터 받는 함수
+DWORD WINAPI ProcessReciveData(LPVOID arg);
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	g_hInst = hInstance;
-	
+
 	// 채팅방 목록 Dialog창 띄우기
 	DialogBox(g_hInst, MAKEINTRESOURCE(IDD_DIALOG2), NULL, InputInformationProc);
 
@@ -79,7 +90,7 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 	bool IsCheckRoom1, IsCheckRoom2;
 
 	switch (uMsg) {
-		
+
 	case WM_INITDIALOG:
 		MoveCenterDialog(hDlg);
 
@@ -92,19 +103,19 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 		// EditText 글자 수 제한
 		SendMessage(portEdit, EM_SETLIMITTEXT, PORT_SIZE, 0);
 		SendMessage(chatNameEdit, EM_SETLIMITTEXT, CHATNAME_SIZE, 0);
-		
+
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 		case IDOK:
-			
+
 			// EditText Text 내용 가져오기
 			GetWindowText(ipAddressEdit, ipAddress, IPADDRESS_SIZE + 1);
 			GetWindowText(portEdit, port, PORT_SIZE + 1);
 			GetWindowText(chatNameEdit, chatName, CHATNAME_SIZE + 1);
 			IsCheckRoom1 = IsDlgButtonChecked(hDlg, IDC_RADIO1);
 			IsCheckRoom2 = IsDlgButtonChecked(hDlg, IDC_RADIO2);
-			
+
 			if (!IsAvailableIP(ipAddress)) {
 				warnningMessage += "Class A,B,C에 해당하는 주소를 입력하세요.\n";
 				checkException = true;
@@ -142,7 +153,7 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 
 			// 현재 접속한 사용자 Dialog 창 생성
 			DialogBox(g_hInst, MAKEINTRESOURCE(IDD_DIALOG1), NULL, ChattingProc);
-			
+
 			return TRUE;
 		case IDCANCEL:
 			EndDialog(hDlg, IDCANCEL);
@@ -155,24 +166,68 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 
 BOOL CALLBACK ChattingProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	int retval, len;
+	WSADATA wsa;
+	char buf[BUFFER_SIZE + 11];
+
 	switch (uMsg) {
 	case WM_INITDIALOG:
 		MoveCenterDialog(hDlg);
 
 		ReadOnlyChatNameEdit = GetDlgItem(hDlg, IDC_EDIT5);
 		ReadOnlyRoomNameEdit = GetDlgItem(hDlg, IDC_EDIT10);
-		
+
+		chattingMessageEdit = GetDlgItem(hDlg, IDC_EDIT1);
+		messageEdit = GetDlgItem(hDlg, IDC_EDIT2);
+
+		SendMessage(messageEdit, EM_SETLIMITTEXT, MESSAGE_SIZE, 0);
+
 		SetWindowText(ReadOnlyChatNameEdit, chatName);
 		SetWindowText(ReadOnlyRoomNameEdit, roomName);
+
+		// 윈속 초기화
+		if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+			return 1;
+
+		HANDLE hThread; // 스레드
+
+		// socket()
+		sock = socket(AF_INET, SOCK_STREAM, 0);
+		if (sock == INVALID_SOCKET) err_quit("socket()");
+
+		// connect()
+		SOCKADDR_IN serveraddr;
+		ZeroMemory(&serveraddr, sizeof(serveraddr));
+		serveraddr.sin_family = AF_INET;
+		serveraddr.sin_addr.s_addr = inet_addr(SERVERIP);
+		serveraddr.sin_port = htons(SERVERPORT);
+		retval = connect(sock, (SOCKADDR *)&serveraddr, sizeof(serveraddr));
+		if (retval == SOCKET_ERROR) err_quit("connect()");
+
+		// 서버와 데이터 통신
+		// 스레드 생성
+		hThread = CreateThread(NULL, 0, ProcessReciveData, NULL, 0, NULL);
+		if (hThread == NULL) {
+			printf("fail make thread\n");
+		}
+		else {
+			CloseHandle(hThread);
+		}
 
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
-	
+
 		case IDCANCEL:
+			closesocket(sock);
+			WSACleanup();
+
 			EndDialog(hDlg, IDCANCEL);
 			return TRUE;
 		case IDCANCEL2:
+			closesocket(sock);
+			WSACleanup();
+
 			EndDialog(hDlg, IDCANCEL);
 			DialogBox(g_hInst, MAKEINTRESOURCE(IDD_DIALOG2), NULL, InputInformationProc);
 
@@ -182,10 +237,31 @@ BOOL CALLBACK ChattingProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			DialogBox(g_hInst, MAKEINTRESOURCE(IDD_DIALOG1), NULL, ChattingProc);
 			return TRUE;
 		case IDC_BUTTON1:
-			return TRUE;
+			char sendMessage[MESSAGE_SIZE];
 
+			GetWindowText(messageEdit, sendMessage, MESSAGE_SIZE + 1);
+			
+			// '\n' 문자 제거
+			len = strlen(sendMessage);
+			if (sendMessage[len - 1] == '\n')
+				sendMessage[len - 1] = '\0';
+			if (strlen(sendMessage) == 0)
+				break;
+
+			string message_buf = "[" + (string)chatName + "]" + " : " + (string)sendMessage;
+
+			// 데이터 보내기
+			retval = send(sock, const_cast<char *>(message_buf.c_str()), strlen(message_buf.c_str()), 0);
+			if (retval == SOCKET_ERROR) {
+				err_display("send()");
+				return 0;
+			}
+			
+			SetFocus(messageEdit);
+			SendMessage(messageEdit, EM_SETSEL, 0, -1);
+			SetWindowText(messageEdit, "");
 		}
-		return FALSE;
+		return TRUE;
 	}
 	return FALSE;
 }
@@ -208,6 +284,29 @@ BOOL CALLBACK CurrentUserListProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 		return FALSE;
 	}
 	return FALSE;
+}
+
+DWORD WINAPI ProcessReciveData(LPVOID arg)
+{
+
+	int retval;		// 데이터 입력
+	char buf[BUFFER_SIZE + 1];
+
+	while (1) {
+		// 데이터 받기
+		retval = recv(sock, buf, BUFFER_SIZE + 1, 0);
+		if (retval == SOCKET_ERROR) {
+			err_display("recv()");
+			break;
+		}
+		else if (retval == 0)
+			break;
+
+		// 받은 데이터 출력
+		buf[retval] = '\0';
+
+		DisplayText("%s \r\n", buf);
+	}
 }
 
 void MoveCenterDialog(HWND hDlg) {
@@ -264,20 +363,6 @@ bool IsAvailableChatName(string chatName) {
 	return true;
 }
 
-bool IsAvailableRoomNumber(string roomNumber) {
-	if (roomNumber == "")
-		return false;
-
-	int num = stoi(roomNumber);
-
-	if (num == 1 || num == 2) {
-		return true;
-	}
-	else {
-		return false;
-	}
-}
-
 void DisplayText(const char *fmt, ...)
 {
 	va_list arg;
@@ -287,9 +372,34 @@ void DisplayText(const char *fmt, ...)
 	char cbuf[512];
 	vsprintf(cbuf, fmt, arg);
 
-	//int nLength = GetWindowTextLength(chattingMessageEdit);
-	//SendMessage(chattingMessageEdit, EM_SETSEL, nLength, nLength);
-	//SendMessage(chattingMessageEdit, EM_REPLACESEL, FALSE, (LPARAM)cbuf);
+	int nLength = GetWindowTextLength(chattingMessageEdit);
+	SendMessage(chattingMessageEdit, EM_SETSEL, nLength, nLength);
+	SendMessage(chattingMessageEdit, EM_REPLACESEL, FALSE, (LPARAM)cbuf);
 
 	va_end(arg);
+}
+
+void err_quit(const char *msg)
+{
+	LPVOID lpMsgBuf;
+	FormatMessage(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+		NULL, WSAGetLastError(),
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPTSTR)&lpMsgBuf, 0, NULL);
+	MessageBox(NULL, (LPCTSTR)lpMsgBuf, msg, MB_ICONERROR);
+	LocalFree(lpMsgBuf);
+	exit(1);
+}
+
+void err_display(const char *msg)
+{
+	LPVOID lpMsgBuf;
+	FormatMessage(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+		NULL, WSAGetLastError(),
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPTSTR)&lpMsgBuf, 0, NULL);
+	printf("[%s] %s", msg, (char *)lpMsgBuf);
+	LocalFree(lpMsgBuf);
 }
