@@ -11,7 +11,6 @@
 #define IDC_BUTTON1                     1006
 #define IDC_EDIT5                       1008
 #define IDC_IPADDRESS1                  1010
-#define IDC_BUTTON2                     1011
 #define IDCANCEL2                       1012
 #define IDC_EDIT10                      1013
 #define ChatName_EDIT                   1014

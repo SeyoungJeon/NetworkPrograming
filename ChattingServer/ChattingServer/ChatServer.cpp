@@ -52,12 +52,7 @@ int main(int argc, char *argv[])
 {
 	int retval;
 	
-	userList[0].push_back("세영이");
-	userList[1].push_back("돼지뚱");
-	userList[0].push_back("seyoung");
-	userList[0].push_back("dain");
-
-	printf("\n====================== 서버 구동 시작 ======================\n");
+	printf("\n================================ 서버 구동 시작 ================================\n");
 
 	// 윈속 초기화
 	WSADATA wsa;
@@ -148,12 +143,13 @@ int main(int argc, char *argv[])
 				ptr->buf[retval] = '\0';
 				printf("[TCP/%s:%d] %s\n", inet_ntoa(clientaddr.sin_addr),
 					ntohs(clientaddr.sin_port), ptr->buf);
+
 			}
 
 			if (FD_ISSET(ptr->sock, &wset)) {
 				data = (string)(ptr->buf);
 				num = DataDivision(data, 1);
-				printf("data : %s , num : %s \n", data.c_str(), num.c_str());
+
 				if (num == "0") {
 					roomNumber = stoi(DataDivision(data, 2)) - 1;
 					bool check = IsExistName(userList[roomNumber], DataDivision(data, 3));
@@ -161,6 +157,12 @@ int main(int argc, char *argv[])
 						strcpy(ptr->buf, "Exist");
 					}
 					else {
+						if (DataDivision(data, 2) == "1") {
+							userList[0].push_back(DataDivision(data, 3));
+						}
+						else if (DataDivision(data, 2) == "2") {
+							userList[1].push_back(DataDivision(data, 3));
+						}
 						strcpy(ptr->buf, "Not Exist");
 					}
 					retval = send(ptr->sock, ptr->buf + ptr->sendbytes,
@@ -175,15 +177,13 @@ int main(int argc, char *argv[])
 				else if (num == "1" || num == "2") {
 					name = DataDivision(data, 2);
 					message = DataDivision(data, 3);
-					string send_message = num + "," + "[" + name + "]" + " : " + message;
-
+					string send_message = num + "," + name + " :" + message;
+				
 					strcpy(ptr->buf, send_message.c_str());
 
 					for (j = 0; j < nTotalSockets; j++) {  // 여러 접속자에게 발송
 						SOCKETINFO *sptr = SocketInfoArray[j];
-						retval = send(sptr->sock, ptr->buf + ptr->sendbytes,
-							ptr->recvbytes - ptr->sendbytes, 0);
-
+						retval = send(sptr->sock, ptr->buf + ptr->sendbytes,ptr->recvbytes - ptr->sendbytes, 0);
 						if (retval == SOCKET_ERROR) {
 							err_display("send()");
 							RemoveSocketInfo(i);
@@ -193,17 +193,43 @@ int main(int argc, char *argv[])
 				}
 				else if (num == "3") {
 					strcpy(ptr->buf, ReturnChatUser().c_str());
-					printf("%s\n", ReturnChatUser().c_str());
-					retval = send(ptr->sock, ptr->buf + ptr->sendbytes,
-						ptr->recvbytes - ptr->sendbytes, 0);
-
+					ptr->recvbytes = strlen(ptr->buf);
+					retval = send(ptr->sock, ptr->buf + ptr->sendbytes, ptr->recvbytes, 0);
 					if (retval == SOCKET_ERROR) {
 						err_display("send()");
 						RemoveSocketInfo(i);
 						continue;
 					}
 				}
-
+				else if (num == "4") {
+					int roomNumber = stoi(DataDivision(data, 2));
+					string name = DataDivision(data, 3);
+					list<string>::iterator iter;
+					if (roomNumber == 0) {
+						for (iter = userList[0].begin(); iter != userList[0].end(); iter++) {
+							if ((*iter) == name) {
+								userList[0].erase(iter);
+								break;
+							}
+						}
+					}
+					else if (roomNumber == 1) {
+						for (iter = userList[1].begin(); iter != userList[1].end(); iter++) {
+							if ((*iter) == name) {
+								userList[1].erase(iter);
+								break;
+							}
+						}
+					}
+					
+					strcpy(ptr->buf, "4,");
+					retval = send(ptr->sock, ptr->buf + ptr->sendbytes, ptr->recvbytes, 0);
+					if (retval == SOCKET_ERROR) {
+						err_display("send()");
+						RemoveSocketInfo(i);
+						continue;
+					}
+				}
 				
 				ptr->sendbytes += retval;
 				if (ptr->recvbytes == ptr->sendbytes) {
@@ -317,13 +343,17 @@ bool IsExistName(list<string> user_list,string name) {
 //사용자 목록 반환하는 함수
 string ReturnChatUser() {
 	string userlist = "3,";
-	int count = 0;
 	list<string>::iterator iter;
-	for (int i = 0; i < CHATROOM_SIZE; i++) {
-		for (iter = userList[i].begin(); iter != userList[i].end(); ++iter) {
-			count++;
-			userlist += to_string(count) + "." + (string)(*iter) + ",";
-		}
+	for (iter = userList[0].begin(); iter != userList[0].end(); ++iter) {
+		userlist += (string)(*iter) + ",";
 	}
+	if(userList[0].size() != 0)
+		userlist = userlist.substr(0, userlist.length() - 1);
+	userlist += "/";
+	for (iter = userList[1].begin(); iter != userList[1].end(); ++iter) {
+		userlist += (string)(*iter) + ",";
+	}
+	if (userList[1].size() != 0)
+		userlist = userlist.substr(0, userlist.length() - 1);
 	return userlist;
 }

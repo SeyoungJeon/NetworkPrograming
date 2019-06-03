@@ -24,7 +24,7 @@
 #define SENDMESSAGE_SIZE 50
 #define PORT_SIZE 5
 #define ROOMNAME_SIZE 10
-#define MESSAGE_SIZE 50
+#define MESSAGE_SIZE 70
 #define BUFFER_SIZE 512
 
 // 임시 주소 포트
@@ -38,7 +38,7 @@ HINSTANCE g_hInst; // hinstantce 객체
 HWND g_hDlg;
 
 HWND ipAddressEdit, chatNameEdit, portEdit, roomNumberEdit1, roomNumberEdit2, messageEdit,
-ReadOnlyRoomNameEdit, ReadOnlyChatNameEdit, chattingMessageEdit, acceptUserListEdit;
+ReadOnlyRoomNameEdit, ReadOnlyChatNameEdit, chattingMessageEdit, acceptUserListEdit1, acceptUserListEdit2;
 char ipAddress[IPADDRESS_SIZE], chatName[CHATNAME_SIZE], port[PORT_SIZE], roomName[ROOMNAME_SIZE];
 bool enterRoom1;
 bool enterRoom2;
@@ -63,6 +63,7 @@ void MoveCenterDialog(HWND hDlg);
 // EditText에 출력해주는 함수
 void DisplayText1(const char *fmt, ...);
 void DisplayText2(const char *fmt, ...);
+void DisplayText3(const char *fmt, ...);
 
 
 // IP 주소 예외처리 함수 (Class A,B,C 주소)
@@ -201,10 +202,10 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 			}
 
 			return TRUE;
-		case IDC_BUTTON2:
-
-			return TRUE;
 		case IDCANCEL:
+			closesocket(sock);
+			WSACleanup();
+
 			EndDialog(hDlg, IDCANCEL);
 			return TRUE;
 		}
@@ -216,7 +217,8 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 BOOL CALLBACK ChattingProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	int retval, len;
-	
+	string buf;
+
 	switch (uMsg) {
 	case WM_INITDIALOG:
 		MoveCenterDialog(hDlg);
@@ -227,28 +229,49 @@ BOOL CALLBACK ChattingProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		chattingMessageEdit = GetDlgItem(hDlg, IDC_EDIT1);
 		messageEdit = GetDlgItem(hDlg, IDC_EDIT2);
 
-		SendMessage(messageEdit, EM_SETLIMITTEXT, MESSAGE_SIZE, 0);
+		SendMessage(messageEdit, EM_SETLIMITTEXT, MESSAGE_SIZE -25, 0);
 
 		SetWindowText(ReadOnlyChatNameEdit, chatName);
 		SetWindowText(ReadOnlyRoomNameEdit, roomName);
+
+		// 서버와 데이터 통신
+		// 스레드 생성
+		hThread = CreateThread(NULL, 0, ProcessReciveData, NULL, 0, NULL);
+		if (hThread == NULL) {
+			printf("fail make thread\n");
+		}
+		else {
+			CloseHandle(hThread);
+		}
 
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 
 		case IDCANCEL:
-			closesocket(sock);
-			WSACleanup();
-
+			
+			
 			EndDialog(hDlg, IDCANCEL);
 			return TRUE;
 		case IDCANCEL2:
-			closesocket(sock);
-			WSACleanup();
+			buf = "4,";
 
+			if (enterRoom1) {
+				buf += "0," + (string)chatName + ",";
+				enterRoom1 = false;
+			}
+			else if (enterRoom2) {
+				buf += "1," + (string)chatName + ",";
+				enterRoom2 = false;
+			}
+			// 데이터 보내기
+			retval = send(sock, const_cast<char *>(buf.c_str()), strlen(buf.c_str()), 0);
+			if (retval == SOCKET_ERROR) {
+				err_display("send()");
+				return 0;
+			}
 			EndDialog(hDlg, IDCANCEL);
-			DialogBox(g_hInst, MAKEINTRESOURCE(IDD_DIALOG2), NULL, InputInformationProc);
-
+			
 			return TRUE;
 		case IDC_BUTTON:
 
@@ -301,7 +324,18 @@ BOOL CALLBACK CurrentUserListProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lP
 	case WM_INITDIALOG:
 		MoveCenterDialog(hDlg);
 
-		acceptUserListEdit = GetDlgItem(hDlg, IDC_EDIT1);
+		// 서버와 데이터 통신
+		// 스레드 생성
+		hThread = CreateThread(NULL, 0, ProcessReciveData, NULL, 0, NULL);
+		if (hThread == NULL) {
+			printf("fail make thread\n");
+		}
+		else {
+			CloseHandle(hThread);
+		}
+
+		acceptUserListEdit1 = GetDlgItem(hDlg, IDC_EDIT1);
+		acceptUserListEdit2 = GetDlgItem(hDlg, IDC_EDIT2);
 
 		request_showUser = "3,";
 		// 데이터 보내기
@@ -345,18 +379,33 @@ DWORD WINAPI ProcessReciveData(LPVOID arg)
 		data = (string)buf;
 
 		if (data.substr(0, 1) == "1" || data.substr(0,1) == "2") {
-			MessageBox(nullptr, TEXT("1 또는 2"), TEXT("Message"), MB_OK);
+			if (enterRoom1 && data.substr(0, 1) == "1") {
+				DisplayText1("%s\r\n", data.erase(0, 2).c_str());
+			}
+			else if (enterRoom2 && data.substr(0,1) == "2") {
+				DisplayText1("%s\r\n", data.erase(0, 2).c_str());
+			}
 		}
 		else if (data.substr(0, 1) == "3") {
-			MessageBox(nullptr, TEXT("3"), TEXT("Message"), MB_OK);
+			//현재 접속자 보여주기
+			string userlist = data.erase(0, 2);
+			size_t pos1 = userlist.find("/");
+			string roomList1;
+			string roomList2;
+			
+			roomList1 = userlist.substr(0, pos1);
+			roomList2 = userlist.erase(0, pos1 + 1);
+			DisplayText2("%s\r\n", roomList2.c_str());
+			DisplayText3("%s\r\n", roomList1.c_str());
+		}
+		else if (data.substr(0, 1) == "4") {
+			MessageBox(nullptr, TEXT("채팅방에서 나왔습니다."), TEXT("Message"), MB_OK);
 		}
 		else if (data == "Exist") {
 			MessageBox(nullptr, TEXT("해당 채팅방에 이미 대화명이 중복된 사용자가 접속해 있습니다."), TEXT("Message"), MB_OK);
 		}
 		else if (data == "Not Exist") {
-			MessageBox(nullptr, TEXT("Not Exist"), TEXT("Message"), MB_OK);
 			DialogBox(g_hInst, MAKEINTRESOURCE(IDD_DIALOG3), NULL, ChattingProc);
-
 		}
 	}
 }
@@ -440,9 +489,25 @@ void DisplayText2(const char *fmt, ...)
 	char cbuf[512];
 	vsprintf(cbuf, fmt, arg);
 
-	int nLength = GetWindowTextLength(acceptUserListEdit);
-	SendMessage(acceptUserListEdit, EM_SETSEL, nLength, nLength);
-	SendMessage(acceptUserListEdit, EM_REPLACESEL, FALSE, (LPARAM)cbuf);
+	int nLength = GetWindowTextLength(acceptUserListEdit1);
+	SendMessage(acceptUserListEdit1, EM_SETSEL, nLength, nLength);
+	SendMessage(acceptUserListEdit1, EM_REPLACESEL, FALSE, (LPARAM)cbuf);
+
+	va_end(arg);
+}
+
+void DisplayText3(const char *fmt, ...)
+{
+	va_list arg;
+
+	va_start(arg, fmt);
+
+	char cbuf[512];
+	vsprintf(cbuf, fmt, arg);
+
+	int nLength = GetWindowTextLength(acceptUserListEdit2);
+	SendMessage(acceptUserListEdit2, EM_SETSEL, nLength, nLength);
+	SendMessage(acceptUserListEdit2, EM_REPLACESEL, FALSE, (LPARAM)cbuf);
 
 	va_end(arg);
 }
