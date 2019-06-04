@@ -1,6 +1,6 @@
-//2019년 1학기 네트워크프로그래밍 숙제 3번
-//성명: 전세영 학번: 14011024
-//플랫폼: V
+// 2019년 1학기 네트워크프로그래밍 숙제 3번
+// 성명: 전세영 학번: 14011024
+// 플랫폼: Visual Studio 2017 (Client Project)
 
 #define _CRT_SECURE_NO_WARNINGS         // 최신 VC++ 컴파일 시 경고 방지
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -42,6 +42,7 @@ ReadOnlyRoomNameEdit, ReadOnlyChatNameEdit, chattingMessageEdit, acceptUserListE
 char ipAddress[IPADDRESS_SIZE], chatName[CHATNAME_SIZE], port[PORT_SIZE], roomName[ROOMNAME_SIZE];
 bool enterRoom1;
 bool enterRoom2;
+bool enterCheck = false;;
 
 SOCKET sock;
 WSADATA wsa;
@@ -98,12 +99,13 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 	string warnningMessage = "";
 	int retval;
 
+
 	switch (uMsg) {
 
 	case WM_INITDIALOG:
 
 		MoveCenterDialog(hDlg);
-
+		
 		ipAddressEdit = GetDlgItem(hDlg, IDC_IPADDRESS1);
 		portEdit = GetDlgItem(hDlg, Port_EDIT);
 		chatNameEdit = GetDlgItem(hDlg, ChatName_EDIT);
@@ -114,35 +116,9 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 		SendMessage(portEdit, EM_SETLIMITTEXT, PORT_SIZE, 0);
 		SendMessage(chatNameEdit, EM_SETLIMITTEXT, CHATNAME_SIZE, 0);
 
-		SetWindowText(chatNameEdit, "seyoung");
+		/*SetWindowText(chatNameEdit, "seyoung");
 		SetWindowText(portEdit, "123");
-		CheckDlgButton(hDlg, IDC_RADIO1, 1);
-
-		// 윈속 초기화
-		if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-			return 1;
-
-		// socket()
-		sock = socket(AF_INET, SOCK_STREAM, 0);
-		if (sock == INVALID_SOCKET) err_quit("socket()");
-
-		// connect()
-		ZeroMemory(&serveraddr, sizeof(serveraddr));
-		serveraddr.sin_family = AF_INET;
-		serveraddr.sin_addr.s_addr = inet_addr(SERVERIP);
-		serveraddr.sin_port = htons(SERVERPORT);
-		retval = connect(sock, (SOCKADDR *)&serveraddr, sizeof(serveraddr));
-		if (retval == SOCKET_ERROR) err_quit("connect()");
-
-		// 서버와 데이터 통신
-		// 스레드 생성
-		hThread = CreateThread(NULL, 0, ProcessReciveData, NULL, 0, NULL);
-		if (hThread == NULL) {
-			printf("fail make thread\n");
-		}
-		else {
-			CloseHandle(hThread);
-		}
+		CheckDlgButton(hDlg, IDC_RADIO1, 1);*/
 
 		return TRUE;
 	case WM_COMMAND:
@@ -155,6 +131,35 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 			GetWindowText(chatNameEdit, chatName, CHATNAME_SIZE + 1);
 			enterRoom1 = IsDlgButtonChecked(hDlg, IDC_RADIO1);
 			enterRoom2 = IsDlgButtonChecked(hDlg, IDC_RADIO2);
+
+			// 윈속 초기화
+			if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+				return 1;
+
+			// socket()
+			sock = socket(AF_INET, SOCK_STREAM, 0);
+			if (sock == INVALID_SOCKET) err_quit("socket()");
+
+			// connect()
+			ZeroMemory(&serveraddr, sizeof(serveraddr));
+			serveraddr.sin_family = AF_INET;
+			serveraddr.sin_addr.s_addr = inet_addr(ipAddress);
+			serveraddr.sin_port = htons((unsigned short)strtoul(port, NULL, 0));
+			retval = connect(sock, (SOCKADDR *)&serveraddr, sizeof(serveraddr));
+			if (retval == SOCKET_ERROR) {
+				err_quit("connect()");
+				return FALSE;
+			}
+
+			// 서버와 데이터 통신
+			// 스레드 생성
+			hThread = CreateThread(NULL, 0, ProcessReciveData, NULL, 0, NULL);
+			if (hThread == NULL) {
+				printf("fail make thread\n");
+			}
+			else {
+				CloseHandle(hThread);
+			}
 
 			if (!IsAvailableIP(ipAddress)) {
 				warnningMessage += "Class A,B,C에 해당하는 주소를 입력하세요.\n";
@@ -171,6 +176,10 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 			if (!enterRoom1 && !enterRoom2) {
 				warnningMessage += "대화방을 선택하세요.\n";
 				checkException = true;
+			}
+			if (enterCheck) {
+				MessageBox(nullptr, TEXT("현재 입장한 대화방이 있습니다"), TEXT("Meesage"), MB_OK);
+				return FALSE;
 			}
 
 			if (checkException) {
@@ -205,7 +214,6 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 		case IDCANCEL:
 			closesocket(sock);
 			WSACleanup();
-
 			EndDialog(hDlg, IDCANCEL);
 			return TRUE;
 		}
@@ -249,11 +257,8 @@ BOOL CALLBACK ChattingProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		switch (LOWORD(wParam)) {
 
 		case IDCANCEL:
-			
-			
-			EndDialog(hDlg, IDCANCEL);
-			return TRUE;
-		case IDCANCEL2:
+			enterCheck = false;
+
 			buf = "4,";
 
 			if (enterRoom1) {
@@ -271,8 +276,8 @@ BOOL CALLBACK ChattingProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				return 0;
 			}
 			EndDialog(hDlg, IDCANCEL);
-			
 			return TRUE;
+	
 		case IDC_BUTTON:
 
 			// 현재 접속한 사용자 Dialog 창 생성
@@ -405,7 +410,10 @@ DWORD WINAPI ProcessReciveData(LPVOID arg)
 			MessageBox(nullptr, TEXT("해당 채팅방에 이미 대화명이 중복된 사용자가 접속해 있습니다."), TEXT("Message"), MB_OK);
 		}
 		else if (data == "Not Exist") {
-			DialogBox(g_hInst, MAKEINTRESOURCE(IDD_DIALOG3), NULL, ChattingProc);
+			if(!enterCheck){
+				enterCheck = true;
+				DialogBox(g_hInst, MAKEINTRESOURCE(IDD_DIALOG3), NULL, ChattingProc);
+			}
 		}
 	}
 }
@@ -522,7 +530,7 @@ void err_quit(const char *msg)
 		(LPTSTR)&lpMsgBuf, 0, NULL);
 	MessageBox(NULL, (LPCTSTR)lpMsgBuf, msg, MB_ICONERROR);
 	LocalFree(lpMsgBuf);
-	exit(1);
+	//exit(1)
 }
 
 void err_display(const char *msg)

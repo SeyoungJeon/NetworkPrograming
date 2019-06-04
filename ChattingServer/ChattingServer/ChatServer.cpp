@@ -1,3 +1,7 @@
+// 2019년 1학기 네트워크프로그래밍 숙제 3번
+// 성명: 전세영 학번: 14011024
+// 플랫폼: Visual Studio 2017 (Server Project)
+
 #define _WINSOCK_DEPCRECATED 
 
 #pragma comment(lib, "ws2_32")
@@ -52,7 +56,7 @@ int main(int argc, char *argv[])
 {
 	int retval;
 	
-	printf("\n================================ 서버 구동 시작 ================================\n");
+	printf("\n==================================================== 서버 구동 시작 ====================================================\n");
 
 	// 윈속 초기화
 	WSADATA wsa;
@@ -229,6 +233,8 @@ int main(int argc, char *argv[])
 						RemoveSocketInfo(i);
 						continue;
 					}
+
+					RemoveSocketInfo(i);
 				}
 				
 				ptr->sendbytes += retval;
