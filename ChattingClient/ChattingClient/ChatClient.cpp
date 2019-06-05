@@ -132,6 +132,28 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 			enterRoom1 = IsDlgButtonChecked(hDlg, IDC_RADIO1);
 			enterRoom2 = IsDlgButtonChecked(hDlg, IDC_RADIO2);
 
+			if (!IsAvailableIP(ipAddress)) {
+				warnningMessage += "Class A,B,C에 해당하는 주소를 입력하세요.\n";
+				checkException = true;
+			}
+			if (!IsAvailablePort(port)) {
+				warnningMessage += "Port 번호는 0 ~ 65535 사이에 수만 가능합니다.\n";
+				checkException = true;
+			}
+			if (!IsAvailableChatName(chatName)) {
+				warnningMessage += "대화명은 영어(소문자)와 숫자를 포함한 10글자 이내만 가능합니다.\n";
+				checkException = true;
+			}
+			if (!enterRoom1 && !enterRoom2) {
+				warnningMessage += "대화방을 선택하세요.\n";
+				checkException = true;
+			}
+			if (enterCheck) {
+				checkException = true;
+				MessageBox(nullptr, TEXT("현재 입장한 대화방이 있습니다"), TEXT("Meesage"), MB_OK);
+				return FALSE;
+			}
+
 			// 윈속 초기화
 			if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
 				return 1;
@@ -159,27 +181,6 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 			}
 			else {
 				CloseHandle(hThread);
-			}
-
-			if (!IsAvailableIP(ipAddress)) {
-				warnningMessage += "Class A,B,C에 해당하는 주소를 입력하세요.\n";
-				checkException = true;
-			}
-			if (!IsAvailablePort(port)) {
-				warnningMessage += "Port 번호는 0 ~ 65535 사이에 수만 가능합니다.\n";
-				checkException = true;
-			}
-			if (!IsAvailableChatName(chatName)) {
-				warnningMessage += "대화명은 영어(소문자)와 숫자를 포함한 10글자 이내만 가능합니다.\n";
-				checkException = true;
-			}
-			if (!enterRoom1 && !enterRoom2) {
-				warnningMessage += "대화방을 선택하세요.\n";
-				checkException = true;
-			}
-			if (enterCheck) {
-				MessageBox(nullptr, TEXT("현재 입장한 대화방이 있습니다"), TEXT("Meesage"), MB_OK);
-				return FALSE;
 			}
 
 			if (checkException) {
