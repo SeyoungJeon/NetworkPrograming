@@ -154,39 +154,39 @@ BOOL CALLBACK InputInformationProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM l
 				return FALSE;
 			}
 
-			// 윈속 초기화
-			if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-				return 1;
-
-			// socket()
-			sock = socket(AF_INET, SOCK_STREAM, 0);
-			if (sock == INVALID_SOCKET) err_quit("socket()");
-
-			// connect()
-			ZeroMemory(&serveraddr, sizeof(serveraddr));
-			serveraddr.sin_family = AF_INET;
-			serveraddr.sin_addr.s_addr = inet_addr(ipAddress);
-			serveraddr.sin_port = htons((unsigned short)strtoul(port, NULL, 0));
-			retval = connect(sock, (SOCKADDR *)&serveraddr, sizeof(serveraddr));
-			if (retval == SOCKET_ERROR) {
-				err_quit("connect()");
-				return FALSE;
-			}
-
-			// 서버와 데이터 통신
-			// 스레드 생성
-			hThread = CreateThread(NULL, 0, ProcessReciveData, NULL, 0, NULL);
-			if (hThread == NULL) {
-				printf("fail make thread\n");
-			}
-			else {
-				CloseHandle(hThread);
-			}
-
 			if (checkException) {
 				MessageBox(nullptr, TEXT(warnningMessage.c_str()), TEXT("Meesage"), MB_OK);
 			}
 			else {
+				// 윈속 초기화
+				if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+					return 1;
+
+				// socket()
+				sock = socket(AF_INET, SOCK_STREAM, 0);
+				if (sock == INVALID_SOCKET) err_quit("socket()");
+
+				// connect()
+				ZeroMemory(&serveraddr, sizeof(serveraddr));
+				serveraddr.sin_family = AF_INET;
+				serveraddr.sin_addr.s_addr = inet_addr(ipAddress);
+				serveraddr.sin_port = htons((unsigned short)strtoul(port, NULL, 0));
+				retval = connect(sock, (SOCKADDR *)&serveraddr, sizeof(serveraddr));
+				if (retval == SOCKET_ERROR) {
+					err_quit("connect()");
+					return FALSE;
+				}
+
+				// 서버와 데이터 통신
+				// 스레드 생성
+				hThread = CreateThread(NULL, 0, ProcessReciveData, NULL, 0, NULL);
+				if (hThread == NULL) {
+					printf("fail make thread\n");
+				}
+				else {
+					CloseHandle(hThread);
+				}
+
 				if (enterRoom1) {
 					strcpy(roomName, "1번 대화방");
 				}

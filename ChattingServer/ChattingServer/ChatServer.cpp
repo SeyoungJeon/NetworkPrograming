@@ -169,6 +169,7 @@ int main(int argc, char *argv[])
 						}
 						strcpy(ptr->buf, "Not Exist");
 					}
+					ptr->recvbytes = strlen(ptr->buf);
 					retval = send(ptr->sock, ptr->buf + ptr->sendbytes,
 						ptr->recvbytes - ptr->sendbytes, 0);
 
